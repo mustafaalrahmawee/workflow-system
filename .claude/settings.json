@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "agent": "typescript",
+  "conventions": {
+    "fileNaming": "kebab-case",
+    "classNaming": "PascalCase",
+    "methodNaming": "camelCase",
+    "databaseNaming": "snake_case",
+    "enumNaming": "SCREAMING_SNAKE_CASE"
+  },
+  "codeStyle": {
+    "indentation": 2,
+    "quotes": "single",
+    "semicolons": true,
+    "trailingComma": "all",
+    "maxLineLength": 100
+  },
+  "paths": {
+    "source": "src",
+    "tests": "test",
+    "documentation": "docs",
+    "prismaSchema": "prisma/schema.prisma",
+    "migrations": "prisma/migrations"
+  },
+  "importantFiles": [
+    "CLAUDE.md",
+    "docs/MINIWORLD.md",
+    "docs/ERR.md",
+    "docs/MAPPING.md",
+    "prisma/schema.prisma",
+    ".env.example"
+  ],
+  "tasks": {
+    "install": "npm install",
+    "dev": "npm run start:dev",
+    "build": "npm run build",
+    "test": "npm run test",
+    "testE2e": "npm run test:e2e",
+    "lint": "npm run lint",
+    "dbGenerate": "npx prisma generate",
+    "dbMigrate": "npx prisma migrate dev",
+    "dbSeed": "npx prisma db seed"
+  },
+  "contextPriority": [
+    "CLAUDE.md",
+    "docs/*.md",
+    "prisma/schema.prisma",
+    "src/**/*.service.ts",
+    "src/**/*.controller.ts",
+    "src/**/*.dto.ts"
+  ]
+}

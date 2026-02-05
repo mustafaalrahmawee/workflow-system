@@ -1,0 +1,115 @@
+# Windsurf Rules – Workflow System
+
+## Project Type
+
+NestJS Backend API with Prisma ORM and PostgreSQL
+
+**Folder Structure:**
+- Backend: `api/`
+- Frontend: `app/`
+
+## Domain
+
+Government/ERP Application & Workflow System for permit processing
+
+## Key Concepts
+
+### Class Table Inheritance (CTI)
+
+- `application` table = supertype
+- `parking_application`, `event_application` = subtypes
+- 1:1 relationship via shared primary key
+- Disjoint: only one subtype per application
+- Partial in DRAFT, Total at SUBMIT
+
+### Workflow State Machine
+
+```
+DRAFT ──submit──▶ SUBMITTED ──start_review──▶ IN_REVIEW ──approve──▶ APPROVED
+  │                 │   │                      │   ├──reject──▶ REJECTED
+  │                 │   └──assign (no status)  │   └──request_info──▶ NEEDS_INFO
+  └──cancel──▶      └──cancel──▶               │                      │
+CANCELLED (terminal)                            └────────resubmit──────┘
+                                                (NEEDS_INFO → SUBMITTED)
+
+```
+
+### Roles
+
+- APPLICANT: create, edit draft, submit, cancel own
+- REVIEWER: assign, review, decide
+- ADMIN: reassign, override, reporting
+
+### Authentication (MVP)
+
+- Email verification: immediately verified (`isEmailVerified = true`)
+- Planned: token-based email verification (later)
+
+## Tech Stack
+
+- NestJS 10+
+- Prisma 5+
+- PostgreSQL 15+
+- JWT Auth
+- class-validator
+
+## File Structure
+
+```
+api/src/
+├── auth/                     # Authentication module
+│   ├── dto/
+│   ├── guards/
+│   └── strategies/
+├── users/                    # User management
+│   ├── dto/
+│   └── repositories/
+├── applications/             # Core application module (aggregate root)
+│   ├── dto/
+│   ├── subtypes/
+│   │   ├── parking/
+│   │   └── event/
+│   ├── guards/
+│   ├── repositories/         # Soft-delete filtering here
+│   └── services/
+├── audit/                    # Audit logging module
+├── common/
+│   ├── decorators/
+│   ├── filters/              # Exception filters
+│   ├── guards/
+│   ├── interceptors/
+│   └── utils/
+└── prisma/
+    ├── prisma.module.ts
+    └── prisma.service.ts
+```
+
+## Conventions
+
+- Files: kebab-case
+- Classes: PascalCase
+- DB columns: snake_case
+- Enums: SCREAMING_SNAKE_CASE
+
+## Important Files
+
+- CLAUDE.md – Agent instructions
+- docs/MINIWORLD.md – Requirements
+- docs/ERR.md – ER model
+- docs/MAPPING.md – CTI mapping
+- api/prisma/schema.prisma – DB schema
+
+## Patterns
+
+1. Validate workflow transitions in service layer
+2. Use transactions for multi-table writes
+3. Always filter soft-deleted records
+4. Log all state changes to audit
+
+## Quality Rules
+
+- No business logic in controllers
+- DTOs with class-validator decorators
+- Explicit return types
+- No `any` type
+- Test coverage for services

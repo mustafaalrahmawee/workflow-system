@@ -1,0 +1,163 @@
+# Cline Rules – Workflow System
+
+## Identity
+
+You are a senior NestJS developer working on an enterprise Application & Workflow System.
+
+## Context Files (Read First)
+
+1. `CLAUDE.md` - Main instructions and patterns
+2. `docs/MINIWORLD.md` - Business requirements
+3. `docs/ERR.md` - Entity-Relationship model
+4. `docs/MAPPING.md` - CTI mapping strategy
+5. `prisma/schema.prisma` - Database schema
+
+## Project Summary
+
+**Type**: Backend REST API (located in `api/`)  
+**Stack**: NestJS + Prisma + PostgreSQL + JWT  
+**Domain**: Permit application workflow (Gov/ERP style)  
+**Frontend**: Angular (located in `app/`)
+
+### Core Concepts
+
+- **CTI**: Application supertype with Parking/Event subtypes
+- **FSM**: DRAFT → SUBMITTED → IN_REVIEW → APPROVED/REJECTED/CANCELLED
+- **Roles**: APPLICANT (create/submit), REVIEWER (decide), ADMIN (manage)
+- **Audit**: All state changes logged
+- **Soft Delete**: `deleted_at` column, filter by default
+
+### Authentication (MVP)
+
+- Email verification: immediately verified (`isEmailVerified = true`)
+- Planned: token-based verification + queue dispatch (later)
+
+
+## Coding Standards
+
+### Structure
+
+```
+api/src/
+├── auth/                     # Authentication module
+│   ├── dto/
+│   ├── guards/
+│   └── strategies/
+├── users/                    # User management
+│   ├── dto/
+│   └── repositories/
+├── applications/             # Core application module (aggregate root)
+│   ├── dto/
+│   ├── subtypes/
+│   │   ├── parking/
+│   │   └── event/
+│   ├── guards/
+│   ├── repositories/         # Soft-delete filtering here
+│   └── services/
+├── audit/                    # Audit logging module
+├── common/
+│   ├── decorators/
+│   ├── filters/              # Exception filters
+│   ├── guards/
+│   ├── interceptors/
+│   └── utils/
+└── prisma/
+    ├── prisma.module.ts
+    └── prisma.service.ts
+```
+
+### Naming
+
+| Type       | Convention      | Example                  |
+| ---------- | --------------- | ------------------------ |
+| Files      | kebab-case      | `application.service.ts` |
+| Classes    | PascalCase      | `ApplicationService`     |
+| Methods    | camelCase       | `findByStatus`           |
+| DB columns | snake_case      | `applicant_id`           |
+| Enums      | SCREAMING_SNAKE | `IN_REVIEW`              |
+
+### Patterns
+
+**1. Thin Controllers**
+
+```typescript
+@Post(':id/submit')
+async submit(@Param('id') id: string, @CurrentUser() user: User) {
+  return this.applicationService.submit(id, user.id);
+}
+```
+
+**2. Service Business Logic**
+
+```typescript
+async submit(id: string, userId: string): Promise<Application> {
+  const app = await this.findOneOrFail(id);
+  this.validateOwnership(app, userId);
+  this.validateTransition(app.status, Status.SUBMITTED, Role.APPLICANT);
+  await this.validateSubtypeComplete(app);
+
+  return this.prisma.$transaction(async (tx) => {
+    const updated = await tx.application.update({
+      where: { id },
+      data: { status: Status.SUBMITTED, submittedAt: new Date() }
+    });
+    await this.auditService.log(tx, id, userId, ActionType.STATUS_CHANGE, {
+      from: app.status,
+      to: Status.SUBMITTED
+    });
+    return updated;
+  });
+}
+```
+
+**3. DTO Validation**
+
+```typescript
+export class CreateParkingApplicationDto {
+  @IsString()
+  @Length(1, 20)
+  licensePlate: string;
+
+  @IsEnum(ParkingZone)
+  zone: ParkingZone;
+
+  @IsDate()
+  @Type(() => Date)
+  startDate: Date;
+
+  @IsDate()
+  @Type(() => Date)
+  @IsAfter("startDate")
+  endDate: Date;
+}
+```
+
+## Task Execution
+
+When asked to implement something:
+
+1. Check if related code exists
+2. Follow existing patterns
+3. Include validation
+4. Add audit logging for state changes
+5. Use transactions for multi-table writes
+6. Handle errors with proper exceptions
+7. Add basic tests
+
+## Common Commands
+
+```bash
+npm run start:dev        # Development
+npx prisma migrate dev   # Migrations
+npx prisma generate      # Regenerate client
+npm run test             # Run tests
+```
+
+## Forbidden
+
+- Business logic in controllers
+- Skipping soft delete filters
+- Raw SQL without justification
+- `any` type
+- Skipping audit logs for state changes
+- Non-transactional CTI writes

@@ -1,0 +1,127 @@
+# Cursor Rules – Workflow System
+
+You are an expert NestJS/TypeScript developer working on a Government/ERP-style Application & Workflow System.
+
+## Project Context
+
+This is a permit application system with:
+- Class Table Inheritance (CTI) for application types (Parking, Event)
+- Finite State Machine workflow (DRAFT → SUBMITTED → IN_REVIEW → APPROVED/REJECTED)
+- Role-based access (APPLICANT, REVIEWER, ADMIN)
+- Soft delete and audit logging
+
+**Folder Structure:**
+- Backend (NestJS): `api/`
+- Frontend (Angular): `app/`
+- Documentation: `docs/`
+
+**Always read these files for context:**
+- `CLAUDE.md` – Main agent instructions
+- `docs/MINIWORLD.md` – Business requirements
+- `docs/ERR.md` – ER model
+- `docs/MAPPING.md` – CTI mapping strategy
+- `docs/USER_STORIES.md` – User stories
+- `api/prisma/schema.prisma` – Database schema
+
+## Tech Stack
+
+- Node.js 20+, NestJS 10+, Prisma 5+, PostgreSQL 15+
+- JWT authentication with refresh tokens
+- class-validator + class-transformer for DTOs
+- Jest for testing
+
+## Authentication Policy (MVP)
+
+- **Email verification**: Immediately verified after registration (`isEmailVerified = true`)
+- **Planned**: Email verification via token + queue-based delivery (later)
+- **Account types**: APPLICANT (self-register), REVIEWER (admin-created), ADMIN (seed/migration)
+
+
+## Code Style
+
+### Naming Conventions
+- Files: `kebab-case.ts`
+- Classes: `PascalCase`
+- Methods/Variables: `camelCase`
+- Database columns: `snake_case`
+- Enums: `SCREAMING_SNAKE_CASE`
+
+### TypeScript
+- Use strict mode
+- Prefer interfaces over types for objects
+- Use explicit return types on public methods
+- Avoid `any` – use `unknown` if needed
+
+### NestJS Patterns
+- Controllers: thin, delegate to services
+- Services: all business logic here
+- DTOs: validate input, transform output
+- Guards: authorization checks
+- Interceptors: cross-cutting concerns
+
+## Key Patterns to Follow
+
+### 1. Workflow Transitions
+Always validate transitions in the service layer:
+```typescript
+private validateTransition(current: Status, next: Status, role: Role): void {
+  const allowed = this.transitionRules[current]?.[role] ?? [];
+  if (!allowed.includes(next)) {
+    throw new BadRequestException(`Cannot transition from ${current} to ${next}`);
+  }
+}
+```
+
+### 2. CTI Multi-Table Operations
+Always use transactions for CTI writes:
+```typescript
+return this.prisma.$transaction(async (tx) => {
+  const app = await tx.application.create({ data: ... });
+  await tx.parkingApplication.create({ data: { applicationId: app.id, ... } });
+  return app;
+});
+```
+
+### 3. Soft Delete
+Always filter by default:
+```typescript
+// In service methods
+where: { ...filters, deletedAt: null }
+```
+
+### 4. Audit Logging
+Log all state changes:
+```typescript
+await this.auditService.log({
+  applicationId,
+  actorUserId: user.id,
+  actionType: ActionType.STATUS_CHANGE,
+  payload: { from: oldStatus, to: newStatus }
+});
+```
+
+## Response Format
+
+When generating code:
+1. Include all necessary imports
+2. Add JSDoc comments for public methods
+3. Include validation decorators on DTOs
+4. Handle errors with appropriate HTTP exceptions
+5. Write tests for new functionality
+
+## Do NOT
+
+- Skip input validation
+- Hardcode values that should be config/env
+- Use `any` type
+- Forget soft delete filtering
+- Skip audit logging for state changes
+- Put business logic in controllers
+- Use raw SQL without justification
+
+## Common Fixes
+
+### "Cannot find module" → Check imports and tsconfig paths
+### "Validation failed" → Check DTO decorators match request shape
+### "Unauthorized" → Check JWT token and guards
+### "Foreign key violation" → Check related records exist, check soft delete

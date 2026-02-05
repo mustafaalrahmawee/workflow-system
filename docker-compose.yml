@@ -1,0 +1,84 @@
+version: "3.8"
+
+services:
+  # PostgreSQL Database
+  db:
+    image: postgres:16-alpine
+    container_name: workflow-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: workflow_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - workflow-network
+
+  # NestJS Backend API
+  api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+      target: development
+    container_name: workflow-api
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/workflow_db?schema=public
+      JWT_SECRET: your-secret-key-min-32-chars-changeme
+      JWT_EXPIRES_IN: 15m
+      JWT_REFRESH_SECRET: your-refresh-secret-min-32-chars-changeme
+      JWT_REFRESH_EXPIRES_IN: 7d
+      PORT: 3000
+    volumes:
+      - ./api/src:/app/api/src
+      - ./api/prisma:/app/api/prisma
+      - ./api/package.json:/app/api/package.json:ro
+      - ./api/tsconfig.json:/app/api/tsconfig.json:ro
+      - ./api/nest-cli.json:/app/api/nest-cli.json:ro
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - workflow-network
+    command: npm run start:dev
+
+  # Angular Frontend
+  app:
+    build:
+      context: ./app
+      dockerfile: Dockerfile
+      target: development
+    container_name: workflow-app
+    restart: unless-stopped
+    ports:
+      - "4200:4200"
+    environment:
+      NODE_ENV: development
+      API_URL: http://localhost:3000
+    volumes:
+      - ./app:/app/app
+      - /app/app/node_modules
+    depends_on:
+      - api
+    networks:
+      - workflow-network
+    command: npm start -- --host 0.0.0.0
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  workflow-network:
+    driver: bridge
