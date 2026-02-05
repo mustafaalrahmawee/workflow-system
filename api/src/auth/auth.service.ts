@@ -1,16 +1,38 @@
-import { Injectable, ConflictException } from '@nestjs/common';
+import {
+  Injectable,
+  ConflictException,
+  UnauthorizedException,
+} from '@nestjs/common';
+import { JwtService } from '@nestjs/jwt';
+import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
 import { UsersService } from '../users/users.service';
 import { RegisterDto } from './dto/register.dto';
+import { LoginDto } from './dto/login.dto';
 import { User, Role } from '@prisma/client';
 
 const SALT_ROUNDS = 10;
 
 export type UserResponse = Omit<User, 'passwordHash' | 'deletedAt'>;
 
+export interface TokenPayload {
+  sub: string; // userId
+  role: Role;
+}
+
+export interface AuthResponse {
+  accessToken: string;
+  refreshToken: string;
+  user: UserResponse;
+}
+
 @Injectable()
 export class AuthService {
-  constructor(private usersService: UsersService) {}
+  constructor(
+    private usersService: UsersService,
+    private jwtService: JwtService,
+    private configService: ConfigService,
+  ) {}
 
   async register(dto: RegisterDto): Promise<UserResponse> {
     // Check if email already exists
@@ -35,6 +57,45 @@ export class AuthService {
     });
 
     return this.toUserResponse(user);
+  }
+
+  async login(dto: LoginDto): Promise<AuthResponse> {
+    const user = await this.usersService.findByEmail(dto.email);
+
+    if (user === null) {
+      throw new UnauthorizedException('Invalid credentials');
+    }
+
+    if (user.isActive === false) {
+      throw new UnauthorizedException('Account is deactivated');
+    }
+
+    const isPasswordValid = await bcrypt.compare(
+      dto.password,
+      user.passwordHash,
+    );
+
+    if (isPasswordValid === false) {
+      throw new UnauthorizedException('Invalid credentials');
+    }
+
+    const payload: TokenPayload = {
+      sub: user.id,
+      role: user.role,
+    };
+
+    const accessToken = this.jwtService.sign(payload);
+
+    const refreshToken = this.jwtService.sign(payload, {
+      secret: this.configService.get<string>('JWT_REFRESH_SECRET'),
+      expiresIn: '7d',
+    });
+
+    return {
+      accessToken,
+      refreshToken,
+      user: this.toUserResponse(user),
+    };
   }
 
   private toUserResponse(user: User): UserResponse {
