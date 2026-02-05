@@ -26,6 +26,10 @@ export interface AuthResponse {
   user: UserResponse;
 }
 
+export interface RefreshResponse {
+  accessToken: string;
+}
+
 @Injectable()
 export class AuthService {
   constructor(
@@ -96,6 +100,46 @@ export class AuthService {
       refreshToken,
       user: this.toUserResponse(user),
     };
+  }
+
+  async refresh(refreshToken: string): Promise<RefreshResponse> {
+    try {
+      const payload = this.jwtService.verify<TokenPayload>(refreshToken, {
+        secret: this.configService.get<string>('JWT_REFRESH_SECRET'),
+      });
+
+      // Verify user still exists and is active
+      const user = await this.usersService.findById(payload.sub);
+
+      if (user === null) {
+        throw new UnauthorizedException('Invalid refresh token');
+      }
+
+      if (user.isActive === false) {
+        throw new UnauthorizedException('Account is deactivated');
+      }
+
+      // Generate new access token with fresh user data
+      const newPayload: TokenPayload = {
+        sub: user.id,
+        role: user.role,
+      };
+
+      const accessToken = this.jwtService.sign(newPayload);
+
+      return { accessToken };
+    } catch (error) {
+      if (error instanceof UnauthorizedException) {
+        throw error;
+      }
+      throw new UnauthorizedException('Invalid or expired refresh token');
+    }
+  }
+
+  async logout(): Promise<{ message: string }> {
+    // MVP: Stateless JWT - client should discard tokens
+    // Production: Store refresh tokens in DB and invalidate here
+    return { message: 'Logged out successfully' };
   }
 
   private toUserResponse(user: User): UserResponse {
