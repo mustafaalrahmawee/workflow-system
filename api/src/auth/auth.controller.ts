@@ -6,7 +6,6 @@ import {
   HttpStatus,
   Ip,
   Headers,
-  UseGuards,
 } from '@nestjs/common';
 import { AuthService } from './auth.service.js';
 import { RegisterDto } from './dto/register.dto.js';
@@ -17,7 +16,6 @@ import { LoginDto } from './dto/login.dto.js';
 import { AuthResponseDto } from './dto/auth-response.dto.js';
 import { RefreshTokenDto } from './dto/refresh-token.dto.js';
 import { MessageResponseDto } from '../common/dto/message-response.dto.js';
-import { JwtAuthGuard } from './guards/jwt-auth.guard.js';
 import { Public } from './decorators/public.decorator.js';
 import { CurrentUser } from './decorators/current-user.decorator.js';
 
@@ -48,6 +46,7 @@ export class AuthController {
     });
   }
 
+  @Public()
   @Post('refresh')
   @Throttle({ default: { limit: 30, ttl: 60000 } }) // 30 requests per minute
   @HttpCode(HttpStatus.OK)
@@ -63,7 +62,6 @@ export class AuthController {
   }
 
   @Post('logout')
-  @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.OK)
   async logout(
     @Body() dto: LogoutDto,
