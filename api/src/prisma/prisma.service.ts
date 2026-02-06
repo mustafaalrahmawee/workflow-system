@@ -1,5 +1,5 @@
 import { Injectable, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient } from '../../prisma/generated/client/client.js';
 import { PrismaPg } from '@prisma/adapter-pg';
 import pg from 'pg';
 
@@ -8,23 +8,23 @@ export class PrismaService
   extends PrismaClient
   implements OnModuleInit, OnModuleDestroy
 {
-  private pool: pg.Pool | null = null;
+  private pool: pg.Pool;
 
   constructor() {
-    const directUrl = process.env.DIRECT_DATABASE_URL;
+    // With engineType = "client" (no Rust binaries), an adapter is required
+    const connectionString =
+      process.env.DIRECT_DATABASE_URL || process.env.DATABASE_URL;
 
-    if (directUrl) {
-      const pool = new pg.Pool({ connectionString: directUrl });
-      const adapter = new PrismaPg(pool);
-      super({ adapter });
-      // Store pool reference for cleanup - use Object.assign to avoid TypeScript issues
-      Object.assign(PrismaService.prototype, { pool });
-    } else {
-      // Fallback to accelerate URL if no direct connection available
-      super({
-        accelerateUrl: process.env.DATABASE_URL,
-      });
+    if (!connectionString) {
+      throw new Error(
+        'Database URL not configured. Set DIRECT_DATABASE_URL or DATABASE_URL environment variable.',
+      );
     }
+
+    const pool = new pg.Pool({ connectionString });
+    const adapter = new PrismaPg(pool);
+    super({ adapter });
+    this.pool = pool;
   }
 
   async onModuleInit() {
@@ -33,8 +33,6 @@ export class PrismaService
 
   async onModuleDestroy() {
     await this.$disconnect();
-    if (this.pool) {
-      await this.pool.end();
-    }
+    await this.pool.end();
   }
 }
