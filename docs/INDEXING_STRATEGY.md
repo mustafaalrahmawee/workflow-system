@@ -114,6 +114,33 @@ Wenn `SELECT *` (oder Prisma ohne `select`) verwendet wird, muss Postgres trotzd
 
 Darum: **Key nur für Access Path**, Display per `INCLUDE`.
 
+## Warum der Index aus dem Development kommt (Winand: Access Paths bestimmen Indizes)
+
+Dieser Index wurde **nicht** "aus dem Schema heraus" oder "auf Verdacht" angelegt, sondern **aus dem tatsächlichen Access Path der Anwendung**, implementiert in `UsersRepository.findMany(...)`.
+
+Winands Kernaussage dazu: Externe Consultants oder auch DBAs sehen meist nur **isolierte Einzelqueries** oder das Schema, aber **nicht** die vollständigen Access Paths der Anwendung (Filterkombinationen, Sortierung, Pagination, UI-Projection, Hot Paths vs Rare Paths). Dadurch können sie selten den Index so gestalten, dass er **für den Gesamt-Workload** maximalen Nutzen bringt. Der Ort, an dem technisches DB-Wissen und Domain-/Produktwissen zusammenkommen, ist das **Development**.
+
+### Der konkrete Access Path aus dem Code
+
+Die Methode `findMany` definiert einen stabilen Query-Shape:
+
+- Filter (optional): `role = ?`, `is_active = ?`
+- Default-Filter: `deleted_at IS NULL` (wenn `includeDeleted` nicht gesetzt ist)
+- Sortierung: `ORDER BY created_at DESC`
+- Pagination: `LIMIT take OFFSET skip`
+- Projection für das Frontend (kein `SELECT *`):
+  `id, email, first_name, last_name, role, is_active, created_at`
+
+Genau diese Kombination aus **WHERE + ORDER BY + LIMIT + SELECT** bestimmt, welcher Index "optimal" ist. Deshalb wurde der Index bewusst als:
+
+- **Partial** (`WHERE deleted_at IS NULL`) → optimiert den häufigsten Pfad
+- **Key** (`role, is_active, created_at DESC, id`) → Filter + Top-N Sort + deterministische Reihenfolge
+- **INCLUDE** (`email, first_name, last_name`) → Covering/Index-Only möglich, ohne B-Tree aufzublähen
+
+### Konsequenz
+
+Der Index ist Teil des **Use-Case Contracts** (`UserListItem`). Wenn sich die UI-Projection oder die Sortier-/Filterlogik ändert, muss der Index neu bewertet werden (weil sich der Access Path geändert hat).
+
 ## References
 
 - Winand, M. *SQL Performance Explained* / [Use The Index, Luke](https://use-the-index-luke.com/)
