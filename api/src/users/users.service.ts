@@ -8,6 +8,7 @@ import { User, Prisma } from '../../prisma/generated/client/client.js';
 import { UsersRepository, UserListItem } from './users.repository.js';
 import { RequestUser } from '../auth/decorators/current-user.decorator.js';
 import { UpdateProfileDto } from './dto/update-profile.dto.js';
+import { AdminCreateUserDto } from './dto/admin-create-user.dto.js';
 import { AdminUpdateUserDto } from './dto/admin-update-user.dto.js';
 import { ListUsersQueryDto } from './dto/list-users-query.dto.js';
 import { UserResponseDto } from './dto/user-response.dto.js';
@@ -19,6 +20,29 @@ export class UsersService {
   private readonly BCRYPT_ROUNDS = 12;
 
   constructor(private usersRepository: UsersRepository) {}
+
+  async adminCreateUser(dto: AdminCreateUserDto): Promise<UserResponseDto> {
+    const existing: User | null = await this.usersRepository.findByEmail(
+      dto.email,
+    );
+    if (existing) {
+      throw new ConflictException('Email already in use');
+    }
+
+    const passwordHash = await bcrypt.hash(dto.password, this.BCRYPT_ROUNDS);
+
+    const user: User = await this.usersRepository.create({
+      email: dto.email,
+      passwordHash,
+      role: dto.role,
+      firstName: dto.firstName,
+      lastName: dto.lastName,
+      phoneNumber: dto.phoneNumber,
+      isEmailVerified: true,
+    });
+
+    return new UserResponseDto(user);
+  }
 
   async listUsers(
     query: ListUsersQueryDto,

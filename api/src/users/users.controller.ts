@@ -1,6 +1,7 @@
 import {
   Controller,
   Get,
+  Post,
   Patch,
   Delete,
   Param,
@@ -16,6 +17,7 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator.js';
 import type { RequestUser } from '../auth/decorators/current-user.decorator.js';
 import { Roles } from '../common/decorators/roles.decorator.js';
 import { UpdateProfileDto } from './dto/update-profile.dto.js';
+import { AdminCreateUserDto } from './dto/admin-create-user.dto.js';
 import { AdminUpdateUserDto } from './dto/admin-update-user.dto.js';
 import { ListUsersQueryDto } from './dto/list-users-query.dto.js';
 import { UserResponseDto } from './dto/user-response.dto.js';
@@ -25,6 +27,15 @@ import { PaginatedResponseDto } from '../common/dto/paginated-response.dto.js';
 @Controller('users')
 export class UsersController {
   constructor(private usersService: UsersService) {}
+
+  @Post()
+  @Roles(Role.ADMIN)
+  @HttpCode(HttpStatus.CREATED)
+  async adminCreateUser(
+    @Body() dto: AdminCreateUserDto,
+  ): Promise<UserResponseDto> {
+    return this.usersService.adminCreateUser(dto);
+  }
 
   @Get()
   @Roles(Role.ADMIN)
