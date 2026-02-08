@@ -1,20 +1,48 @@
-import { Injectable } from '@nestjs/common';
-import { UsersRepository } from './users.repository.js';
+import { Injectable, ConflictException } from '@nestjs/common';
+import * as bcrypt from 'bcrypt';
 import { User, Prisma } from '../../prisma/generated/client/client.js';
+import { UsersRepository } from './users.repository.js';
+import { RequestUser } from '../auth/decorators/current-user.decorator.js';
+import { UpdateProfileDto } from './dto/update-profile.dto.js';
+import { UserResponseDto } from './dto/user-response.dto.js';
 
 @Injectable()
 export class UsersService {
+  private readonly BCRYPT_ROUNDS = 12;
+
   constructor(private usersRepository: UsersRepository) {}
 
-  async create(data: Prisma.UserCreateInput): Promise<User> {
-    return this.usersRepository.create(data);
-  }
+  async updateProfile(
+    currentUser: RequestUser,
+    dto: UpdateProfileDto,
+  ): Promise<UserResponseDto> {
+    if (dto.email && dto.email !== currentUser.email) {
+      const existing: User | null = await this.usersRepository.findByEmail(
+        dto.email,
+      );
+      if (existing) {
+        throw new ConflictException('Email already in use');
+      }
+    }
 
-  async findById(id: string): Promise<User | null> {
-    return this.usersRepository.findById(id);
-  }
+    const updateData: Prisma.UserUpdateInput = {};
 
-  async findByEmail(email: string): Promise<User | null> {
-    return this.usersRepository.findByEmail(email);
+    if (dto.email !== undefined) updateData.email = dto.email;
+    if (dto.firstName !== undefined) updateData.firstName = dto.firstName;
+    if (dto.lastName !== undefined) updateData.lastName = dto.lastName;
+    if (dto.phoneNumber !== undefined) updateData.phoneNumber = dto.phoneNumber;
+
+    if (dto.password) {
+      updateData.passwordHash = await bcrypt.hash(
+        dto.password,
+        this.BCRYPT_ROUNDS,
+      );
+    }
+
+    const updated: User = await this.usersRepository.update(
+      currentUser.id,
+      updateData,
+    );
+    return new UserResponseDto(updated);
   }
 }
