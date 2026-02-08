@@ -10,6 +10,7 @@ import { RequestUser } from '../auth/decorators/current-user.decorator.js';
 import { UpdateProfileDto } from './dto/update-profile.dto.js';
 import { AdminUpdateUserDto } from './dto/admin-update-user.dto.js';
 import { UserResponseDto } from './dto/user-response.dto.js';
+import { MessageResponseDto } from '../common/dto/message-response.dto.js';
 
 @Injectable()
 export class UsersService {
@@ -69,5 +70,15 @@ export class UsersService {
 
     const updated: User = await this.usersRepository.update(userId, updateData);
     return new UserResponseDto(updated);
+  }
+
+  async softDeleteUser(userId: string): Promise<MessageResponseDto> {
+    const user: User | null = await this.usersRepository.findById(userId);
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    await this.usersRepository.softDelete(userId);
+    return { message: 'User deleted successfully' };
   }
 }

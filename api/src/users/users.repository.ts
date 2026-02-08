@@ -24,4 +24,11 @@ export class UsersRepository {
       data,
     });
   }
+
+  async softDelete(id: string): Promise<User> {
+    return this.prisma.user.update({
+      where: { id },
+      data: { deletedAt: new Date() },
+    });
+  }
 }

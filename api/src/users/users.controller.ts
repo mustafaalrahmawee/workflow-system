@@ -1,6 +1,7 @@
 import {
   Controller,
   Patch,
+  Delete,
   Param,
   Body,
   HttpCode,
@@ -15,6 +16,7 @@ import { Roles } from '../common/decorators/roles.decorator.js';
 import { UpdateProfileDto } from './dto/update-profile.dto.js';
 import { AdminUpdateUserDto } from './dto/admin-update-user.dto.js';
 import { UserResponseDto } from './dto/user-response.dto.js';
+import { MessageResponseDto } from '../common/dto/message-response.dto.js';
 
 @Controller('users')
 export class UsersController {
@@ -37,5 +39,14 @@ export class UsersController {
     @Body() dto: AdminUpdateUserDto,
   ): Promise<UserResponseDto> {
     return this.usersService.adminUpdateUser(id, dto);
+  }
+
+  @Delete(':id')
+  @Roles(Role.ADMIN)
+  @HttpCode(HttpStatus.OK)
+  async softDeleteUser(
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<MessageResponseDto> {
+    return this.usersService.softDeleteUser(id);
   }
 }
