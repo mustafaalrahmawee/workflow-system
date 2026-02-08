@@ -5,18 +5,40 @@ import {
 } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import { User, Prisma } from '../../prisma/generated/client/client.js';
-import { UsersRepository } from './users.repository.js';
+import { UsersRepository, UserListItem } from './users.repository.js';
 import { RequestUser } from '../auth/decorators/current-user.decorator.js';
 import { UpdateProfileDto } from './dto/update-profile.dto.js';
 import { AdminUpdateUserDto } from './dto/admin-update-user.dto.js';
+import { ListUsersQueryDto } from './dto/list-users-query.dto.js';
 import { UserResponseDto } from './dto/user-response.dto.js';
 import { MessageResponseDto } from '../common/dto/message-response.dto.js';
+import { PaginatedResponseDto } from '../common/dto/paginated-response.dto.js';
 
 @Injectable()
 export class UsersService {
   private readonly BCRYPT_ROUNDS = 12;
 
   constructor(private usersRepository: UsersRepository) {}
+
+  async listUsers(
+    query: ListUsersQueryDto,
+  ): Promise<PaginatedResponseDto<UserResponseDto>> {
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 20;
+    const skip = (page - 1) * limit;
+
+    const [users, total]: [UserListItem[], number] =
+      await this.usersRepository.findMany({
+        role: query.role,
+        isActive: query.isActive,
+        includeDeleted: query.includeDeleted,
+        skip,
+        take: limit,
+      });
+
+    const data = users.map((user) => new UserResponseDto(user));
+    return new PaginatedResponseDto(data, total, page, limit);
+  }
 
   async updateProfile(
     currentUser: RequestUser,
