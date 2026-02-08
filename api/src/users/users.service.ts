@@ -1,9 +1,14 @@
-import { Injectable, ConflictException } from '@nestjs/common';
+import {
+  Injectable,
+  ConflictException,
+  NotFoundException,
+} from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import { User, Prisma } from '../../prisma/generated/client/client.js';
 import { UsersRepository } from './users.repository.js';
 import { RequestUser } from '../auth/decorators/current-user.decorator.js';
 import { UpdateProfileDto } from './dto/update-profile.dto.js';
+import { AdminUpdateUserDto } from './dto/admin-update-user.dto.js';
 import { UserResponseDto } from './dto/user-response.dto.js';
 
 @Injectable()
@@ -43,6 +48,26 @@ export class UsersService {
       currentUser.id,
       updateData,
     );
+    return new UserResponseDto(updated);
+  }
+
+  async adminUpdateUser(
+    userId: string,
+    dto: AdminUpdateUserDto,
+  ): Promise<UserResponseDto> {
+    const user: User | null = await this.usersRepository.findById(userId);
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    const updateData: Prisma.UserUpdateInput = {};
+
+    if (dto.role !== undefined) updateData.role = dto.role;
+    if (dto.isActive !== undefined) updateData.isActive = dto.isActive;
+    if (dto.isEmailVerified !== undefined)
+      updateData.isEmailVerified = dto.isEmailVerified;
+
+    const updated: User = await this.usersRepository.update(userId, updateData);
     return new UserResponseDto(updated);
   }
 }
